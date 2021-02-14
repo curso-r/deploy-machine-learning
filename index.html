@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Deploy de modelos de Machine Learning em R</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Fernando Corrêa" />
+    <meta name="date" content="2021-02-14" />
+    <link href="libs/remark-css-0.0.1/default.css" rel="stylesheet" />
+    <link href="libs/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Deploy de modelos de Machine Learning em R
+## docker + API Rest + tidymodels
+### Fernando Corrêa
+### Curso-R
+### 2021-02-14
+
+---
+
+
+# Introdução 
+
+
+
+O _deploy_ de Modelos de Machine Learning é chato!
+
+--
+
+- As dependências são numerores e normalmente não são muito comuns (keras, cuda, torch, bibliotecas de algebra linear etc)
+
+--
+
+- Existem muitos frameworks
+
+--
+
+- Quem não toma cuidado sofre com vazamento de dados!
+
+--
+
+- Quem poderá nos socorrer?
+
+--
+
+&lt;img src="https://raw.githubusercontent.com/matthewfeickert/talk-IML-workshop-2019/master/figures/Docker_nyan_whale.gif" width="50%" /&gt;
+
+---
+
+# Ideia geral
+
+Hoje vamos aprender a construir **sem sofrer** uma API que execute os seguintes passos:
+
+**1.** Recebe um JSON em formato pré-definido:
+
+
+```json
+{
+  # dados biometricos de algumas plantas
+  # nosso modelo vai dizer a qual espécie uma planta
+  # com essas medidas pertence
+  "Sepal.Length":5.1,
+  "Sepal.Width":3.5,
+  "Petal.Length":1.4,
+  "Petal.Width":0.2,
+}
+```
+
+--
+
+**2.** Execute uma série de rotinas de pré-processamento nesses dados.
+
+&lt;img src="imagem.png" width="40%" /&gt;
+
+---
+
+# Ideia geral
+
+E por fim...
+
+**3.** Retorne um JSON com o resultado de um modelo preditivo:
+
+
+```json
+{
+  "Sepal.Length":5.1,
+  "Sepal.Width":3.5,
+  "Petal.Length":1.4,
+  "Petal.Width":0.2,
+  # AQUI VAI UM EXEMPLO, MAS PODE SER O QUE VOCÊ QUISER:
+  "especie_mais_provavel": "Setosa"
+}
+```
+
+---
+
+# O pulo do gato
+
+`tidymodels` é uma meta-biblioteca da linguagem R que te permite especificar de maneira compartimentada todos os passos do workflow da construção de um modelo
+
+**1.** Execução de rotinas de pré-processamento 
+
+--
+
+**2.** Ajuste de hiperparâmetros por reamostragem/validação cruzada, com recalculo do pré-processamento nas oportunidades adequadas
+
+--
+
+**3.** Ajuste do modelo final e solifidicação das regras de pré-processamento com relação à base completa
+
+---
+
+# Criando uma receita de pré-processamento
+
+Uma rotina não é mais do que uma sequência de passos, que pode ser declarada numa interface amigável e depois exportado para um objeto `receita.rds`
+
+--
+
+
+```r
+receita &lt;- recipe(
+  Species ~ .,
+  # formula do nosso modelo. à esquerda do ~ temos a variável
+  # resposta e à direita as nossas covariáveis. O "." indica que
+  # tudo que não é "Species" vai ser usado para prever
+  data = iris) %&gt;% 
+  # iris é o nosso banco de dados de flores
+  step_normalize(all_numeric()) %&gt;%
+  # esse passo vai deixar todas as variáveis númericas
+  # dos dados sem escala
+  step_medianimpute(all_numeric())
+  # esse passo vai inserir a mediana das colunas caso encontra
+  # alguma informação faltante
+
+# para que a gente consiga usar os dados depois,
+# basta salvar essa receita:
+
+saveRDS(prep(receita, iris), "receita.rds")
+```
+
+---
+
+# Ajustando um modelo KNN | Escolhendo o melhor k
+
+
+```r
+modelo_knn &lt;- nearest_neighbor(neighbors = tune()) %&gt;% 
+  set_engine("kknn") %&gt;% 
+  set_mode("classification") %&gt;% 
+  translate()
+
+reamostra_vizinhos &lt;- workflow() %&gt;% 
+  add_recipe(receita) %&gt;% 
+  add_model(modelo_knn) %&gt;% 
+  tune_grid(resamples = mc_cv(iris, .3),
+            grid = 60)
+```
+
+---
+
+# Ajustando um modelo KNN | Escolhendo o melhor k
+
+
+```r
+reamostra_vizinhos %&gt;% 
+  autoplot()
+```
+
+&lt;img src="ajusta_knn.png" width="65%" style="display: block; margin: auto;" /&gt;
+
+---
+
+# Ajustando o modelo final
+
+
+```r
+modelo_final &lt;- workflow() %&gt;% 
+  add_recipe(receita) %&gt;% 
+  add_model(
+    finalize_model(
+      modelo_knn, 
+      select_best(
+        reamostra_vizinhos, 
+        "accuracy"
+      )
+    )
+  ) %&gt;% 
+  fit(iris)
+
+# salvando para que a gente consiga usar no R
+saveRDS(modelo_final, "modelo_final.rds")
+```
+
+---
+
+# Disponibilizando a API
+
+Agora basta usar os arquivos criados em um script `api.R` que segue uma leve formatação
+
+
+```r
+#* Gera a previsão em cima de um conjunto de dados
+#* @post /gera_previsao 
+getprediction &lt;- function(req) {
+  example &lt;- jsonlite::fromJSON(req$postBody)
+  
+  modelo_final &lt;- readRDS(path = "modelo_final.rds")
+  receita &lt;- readRDS(path = "receita.rds")
+  prediction &lt;- predict(
+    modelo_final,
+    new_data = bake(receita, parsed_example))
+
+  dplyr::bind_cols(parsed_example, prediction)
+}
+```
+
+Para liberar a API, basta fazer:
+
+
+```r
+r &lt;- plumber::plumb("api.R")
+r$run(port = 80)
+```
+
+---
+
+# Escrevendo o Dockerfile
+
+No fim, basta construir um dockerfile que execute esse script
+
+
+```docker
+FROM rocker/tidyverse
+
+RUN apt-get update -qq &amp;&amp; apt-get install -y \
+  git-core \
+  libssl-dev \
+  curl \
+  libsodium-dev \
+  libxml2-dev
+
+COPY ./ /tmp/api/
+
+RUN R -e "install.packages('plumber')"
+RUN R -e "install.packages('tidymodels')"
+
+EXPOSE 80
+
+CMD ["Rscript", "-e", 
+      "pr &lt;- plumber::plumb('api.R');
+       pr$run(host= '0.0.0.0', port=80, swagger = TRUE)"
+     ]
+```
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>
