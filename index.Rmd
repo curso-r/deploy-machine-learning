@@ -50,7 +50,7 @@ Hoje vamos implementar um fluxo _end-to-end_ de Machine Learning em R sem sofrer
 
 **1.** Treinar um modelo de classificação a partir dos vizinhos mais próximos (também conhecido como K-Nearest Neighbor(KNN));
 
-**2.** Disponibilizar ums serviço online que disponibiliza o nosso modelo para qualquer pessoa ou aplicação que precise consulta-lo.
+**2.** Criar um serviço online que disponibiliza o nosso modelo para qualquer pessoa ou aplicação que precise consulta-lo.
 
 --
 
@@ -99,7 +99,7 @@ knitr::include_graphics("imagem.png")
 
 ---
 
-# Ideia geral
+# Detalhamento API
 
 E por fim...
 
@@ -136,7 +136,7 @@ E por fim...
 
 # Criando uma receita de pré-processamento
 
-Uma rotina não é mais do que uma sequência de passos, que pode ser declarada numa interface amigável e depois exportado para um objeto `receita.rds`
+Uma rotina (receita) não é mais do que uma sequência de passos, que pode ser declarada numa interface amigável e depois exportado para um objeto `receita.rds`
 
 --
 
