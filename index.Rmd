@@ -13,6 +13,7 @@ output:
       countIncrementalSlides: false
 ---
 
+
 # Introdução 
 
 
@@ -21,15 +22,15 @@ O _deploy_ de Modelos de Machine Learning é chato!
 
 --
 
-- As dependências são numerores e normalmente não são muito comuns (keras, cuda, torch, bibliotecas de algebra linear etc)
+- As dependências são numerosas e normalmente não são muito comuns (*keras* e *torch* para _Deep Learning_, *cuda* para uso de _GPU_ (placa de vído), bibliotecas de algebra linear etc)
 
 --
 
-- Existem muitos frameworks
+- Existem muitos frameworks e produtos voltados para isso, como _SageMaker_ da AWS e _DataBricks_ 
 
 --
 
-- Quem não toma cuidado sofre com vazamento de dados!
+- As rotinas de pré-processamento precisam receber muito carinho.
 
 --
 
@@ -45,7 +46,34 @@ knitr::include_graphics("https://raw.githubusercontent.com/matthewfeickert/talk-
 
 # Ideia geral
 
-Hoje vamos aprender a construir **sem sofrer** uma API que execute os seguintes passos:
+Hoje vamos implementar um fluxo _end-to-end_ de Machine Learning em R sem sofrer!
+
+**1.** Treinar um modelo de classificação a partir dos vizinhos mais próximos (também conhecido como K-Nearest Neighbor(KNN));
+
+**2.** Disponibilizar ums serviço online que disponibiliza o nosso modelo para qualquer pessoa ou aplicação que precise consulta-lo.
+
+--
+
+Nosso modelo inclusive já vai aplicar uma série de pré-processamentos nesses dados.
+
+```{r, echo = FALSE, out.width="40%"}
+knitr::include_graphics("imagem.png")
+```
+
+---
+
+# O modelo KNN
+
+```{r, echo = FALSE, out.width = "90%"}
+knitr::include_graphics("https://miro.medium.com/max/1506/0*jqxx3-dJqFjXD6FA")
+```
+
+
+---
+
+# Detalhamento API
+
+Uma parte importante do que vamos fazer hoje será construir **sem sofrer** uma API que execute os seguintes passos:
 
 **1.** Recebe um JSON em formato pré-definido:
 
@@ -247,3 +275,18 @@ CMD ["Rscript", "-e",
      ]
 ```
 
+---
+
+# Conclusão
+
+- Docker simplifica muito a vida e abstrai todos os problemas que a gente pode acabar tendo quando coloca modelos em produção.
+
+-- 
+
+- Os pacotes do `tidymodels` oferecem um jeito de construir modelos de _machine learning_ que se integra naturalmente com o que será necessário fazer no ambiente de produção.
+
+-- 
+
+- Mesmo usando outras soluções de _deploy_ de modelos de machine learning integrar imagens _docker_ 
+
+---

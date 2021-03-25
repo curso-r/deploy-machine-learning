@@ -4,7 +4,7 @@
     <title>Deploy de modelos de Machine Learning em R</title>
     <meta charset="utf-8" />
     <meta name="author" content="Fernando Corrêa" />
-    <meta name="date" content="2021-02-14" />
+    <meta name="date" content="2021-03-25" />
     <link href="libs/remark-css-0.0.1/default.css" rel="stylesheet" />
     <link href="libs/remark-css-0.0.1/default-fonts.css" rel="stylesheet" />
   </head>
@@ -16,9 +16,10 @@ class: center, middle, inverse, title-slide
 ## docker + API Rest + tidymodels
 ### Fernando Corrêa
 ### Curso-R
-### 2021-02-14
+### 2021-03-25
 
 ---
+
 
 
 # Introdução 
@@ -29,15 +30,15 @@ O _deploy_ de Modelos de Machine Learning é chato!
 
 --
 
-- As dependências são numerores e normalmente não são muito comuns (keras, cuda, torch, bibliotecas de algebra linear etc)
+- As dependências são numerosas e normalmente não são muito comuns (*keras* e *torch* para _Deep Learning_, *cuda* para uso de _GPU_ (placa de vído), bibliotecas de algebra linear etc)
 
 --
 
-- Existem muitos frameworks
+- Existem muitos frameworks e produtos voltados para isso, como _SageMaker_ da AWS e _DataBricks_ 
 
 --
 
-- Quem não toma cuidado sofre com vazamento de dados!
+- As rotinas de pré-processamento precisam receber muito carinho.
 
 --
 
@@ -51,7 +52,30 @@ O _deploy_ de Modelos de Machine Learning é chato!
 
 # Ideia geral
 
-Hoje vamos aprender a construir **sem sofrer** uma API que execute os seguintes passos:
+Hoje vamos implementar um fluxo _end-to-end_ de Machine Learning em R sem sofrer!
+
+**1.** Treinar um modelo de classificação a partir dos vizinhos mais próximos (também conhecido como K-Nearest Neighbor(KNN));
+
+**2.** Disponibilizar ums serviço online que disponibiliza o nosso modelo para qualquer pessoa ou aplicação que precise consulta-lo.
+
+--
+
+Nosso modelo inclusive já vai aplicar uma série de pré-processamentos nesses dados.
+
+&lt;img src="imagem.png" width="40%" /&gt;
+
+---
+
+# O modelo KNN
+
+&lt;img src="https://miro.medium.com/max/1506/0*jqxx3-dJqFjXD6FA" width="90%" /&gt;
+
+
+---
+
+# Detalhamento API
+
+Uma parte importante do que vamos fazer hoje será construir **sem sofrer** uma API que execute os seguintes passos:
 
 **1.** Recebe um JSON em formato pré-definido:
 
